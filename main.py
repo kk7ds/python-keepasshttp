@@ -8,6 +8,8 @@ from Crypto.Cipher import AES
 from Crypto import Random
 from ConfigParser import ConfigParser
 import uuid
+from optparse import OptionParser
+import subprocess
 
 import keepass_util
 
@@ -147,6 +149,8 @@ class KeePassHTTPContext(object):
         url = self._decrypt(nonce64, base64.b64decode(enc_url))
         submit_url = self._decrypt(nonce64, base64.b64decode(enc_submit_url))
         entry = self._db_util.find_entry_by_url(submit_url)
+        if not entry:
+            entry = self._db_util.find_entry_by_url(url)
         resp = {
             'RequestType': 'get-logins',
             }
@@ -189,8 +193,37 @@ class Handler(BaseHTTPServer.BaseHTTPRequestHandler):
         s.seek(0)
         self.wfile.write(s.read())
 
+def parse_opts():
+    op = OptionParser()
+    op.add_option('-p', '--password', dest='password',
+                  help='Password for database')
+    op.add_option('-a', '--ask', dest='askpass', action='store_true',
+                  default=False, help='Ask for password')
+    return op
+
+def usage(op, error=None):
+    op.print_help()
+    if error:
+        print "ERROR: %s" % error
+
 if __name__ == '__main__':
-    # Very hacky thing for testing
-    kpctxt = KeePassHTTPContext('test.kdb', 'password')
+    op = parse_opts()
+    options, args = op.parse_args()
+    if len(args) != 1:
+        usage(op, 'A database must be specified')
+        sys.exit(1)
+    if options.askpass:
+        p = subprocess.Popen(['/usr/libexec/openssh/ssh-askpass',
+                              'KeePassX Database Password'],
+                             stdout=subprocess.PIPE)
+        passphrase = p.stdout.read().strip()
+        p.wait()
+    elif options.password:
+        passphrase = options.password
+    else:
+        usage(op, 'Either -p or -a is required')
+        sys.exit(1)
+
+    kpctxt = KeePassHTTPContext(args[0], passphrase)
     httpd = BaseHTTPServer.HTTPServer(('127.0.0.1', 19455), Handler)
     httpd.serve_forever()
