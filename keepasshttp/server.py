@@ -23,6 +23,7 @@ import base64
 import json
 import os
 import sys
+import time
 import uuid
 
 from keepasshttp import util
@@ -54,8 +55,16 @@ def configfile_location():
 
 
 class KeePassHTTPContext(object):
-    def __init__(self, db_file, db_pass, allow_associate=False):
-        self._db_util = util.KeePassUtil(db_file, db_pass)
+    def __init__(self, db_file, db_pass, allow_associate=False,
+                 timeout=None):
+        self._db_file = db_file
+        self._db_pass = db_pass
+        if not callable(db_pass):
+            self._db_util = util.KeePassUtil(db_file, db_pass)
+        else:
+            self._db_util = None
+        self._timeout = timeout
+        self._last_password = 0
         self._config = ConfigParser.ConfigParser()
         self._config.read(configfile_location())
         self._allow_associate = allow_associate
@@ -181,7 +190,27 @@ class KeePassHTTPContext(object):
 
         return encentry
 
+    def _check_timeout(self):
+        if not self._timeout:
+            return True
+        now = time.time()
+        if (now - self._last_password) < (self._timeout * 60):
+            return True
+
+        while True:
+            db_pass = self._db_pass()
+            if not db_pass:
+                return False
+            try:
+                self._db_util = util.KeePassUtil(self._db_file, db_pass)
+                self._last_password = now
+                return True
+            except ValueError:
+                pass
+
     def get_logins(self, nonce64, verifier64, enc_url, enc_submit_url):
+        if not self._check_timeout():
+            return {'Success': False}
         url = self._decrypt(nonce64, base64.b64decode(enc_url))
         submit_url = self._decrypt(nonce64, base64.b64decode(enc_submit_url))
         LOG.debug('Searching for urls: %s and %s' % (url, submit_url))

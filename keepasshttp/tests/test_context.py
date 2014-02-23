@@ -177,6 +177,77 @@ class TestContext(unittest.TestCase):
                           'Uuid': 'encrypted-uuid'},
                          encentry)
 
+    @mock.patch('time.time')
+    def test_check_timeout_not_timed_out(self, time):
+        fake_get_password = mock.MagicMock()
+        context = server.KeePassHTTPContext('fake', fake_get_password,
+                                            timeout=1)
+        time.return_value = 1
+        self.assertTrue(context._check_timeout())
+        self.assertEqual(0, fake_get_password.call_count)
+
+    @mock.patch('time.time')
+    def test_check_timeout_asks_for_password(self, time):
+        fake_get_password = mock.MagicMock()
+        fake_get_password.return_value = 'password'
+        context = server.KeePassHTTPContext('fake', fake_get_password,
+                                            timeout=1)
+        time.return_value = 100
+        with mock.patch('keepasshttp.util.KeePassUtil') as db:
+            self.assertTrue(context._check_timeout())
+            db.assert_called_once_with('fake', 'password')
+
+        fake_get_password.assert_called_once_with()
+
+    @mock.patch('time.time')
+    def test_check_timeout_asks_for_password_again(self, time):
+        passwords = ['right', 'wrong']
+
+        def fake_get_password():
+            return passwords.pop()
+
+        def init_db(filename, password):
+            if password != 'right':
+                raise ValueError('Wrong password!')
+
+        context = server.KeePassHTTPContext('fake', fake_get_password,
+                                            timeout=1)
+        time.return_value = 100
+        with mock.patch('keepasshttp.util.KeePassUtil') as db:
+            db.side_effect = init_db
+            self.assertTrue(context._check_timeout())
+            self.assertEqual(2, db.call_count)
+
+    @mock.patch('time.time')
+    def test_check_timeout_fails_with_no_password(self, time):
+        fake_get_password = mock.MagicMock()
+        fake_get_password.return_value = ''
+
+        context = server.KeePassHTTPContext('fake', fake_get_password,
+                                            timeout=1)
+        time.return_value = 100
+        with mock.patch('keepasshttp.util.KeePassUtil') as db:
+            self.assertFalse(context._check_timeout())
+            self.assertEqual(0, db.call_count)
+
+    @mock.patch('time.time')
+    def test_check_timeout_honors_timeout(self, time):
+        fake_get_password = mock.MagicMock()
+        fake_get_password.return_value = 'foo'
+        context = server.KeePassHTTPContext('fake', fake_get_password,
+                                            timeout=1)
+        time.return_value = 100
+        with mock.patch('keepasshttp.util.KeePassUtil') as db:
+            context._check_timeout()
+            context._check_timeout()
+        fake_get_password.assert_called_once_with()
+
+    def test_get_logins_check_timeout_fails(self):
+        with mock.patch.object(self.context, '_check_timeout') as check:
+            check.return_value = False
+            resp = self.context.get_logins('foo', 'bar', 'baz', 'bat')
+            self.assertEqual({'Success': False}, resp)
+
     def test_get_logins(self):
         def fake_decrypt(nonce, data):
             self.assertEqual('foo', nonce)
@@ -197,7 +268,9 @@ class TestContext(unittest.TestCase):
         @mock.patch.object(self.context, '_sign')
         @mock.patch.object(self.context, '_decrypt')
         @mock.patch.object(self.context, '_make_entry')
-        def do_test(make_entry, decrypt, sign, verify):
+        @mock.patch.object(self.context, '_check_timeout')
+        def do_test(check_timeout, make_entry, decrypt, sign, verify):
+            check_timeout.return_value = True
             decrypt.side_effect = fake_decrypt
             make_entry.return_value = 'entry'
             verify.return_value = True
@@ -207,6 +280,7 @@ class TestContext(unittest.TestCase):
                                            base64.b64encode('suburl'))
             verify.assert_called_once_with('foo', 'bar')
             self.assertEqual(1, sign.call_count)
+            check_timeout.assert_called_once_with()
             return resp
 
         resp = do_test()

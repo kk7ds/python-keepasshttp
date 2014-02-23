@@ -40,6 +40,9 @@ def parse_opts():
                   help='Log filename')
     op.add_option('-d', '--daemon', dest='daemon', action='store_true',
                   default=False, help='Start as a daemon')
+    op.add_option('-t', '--timeout', dest='timeout', type='int',
+                  default=None, metavar='MINUTES',
+                  help='Require password on demand and this often')
     return op
 
 
@@ -90,6 +93,10 @@ def ask_for_password():
     return passphrase
 
 
+def get_password(options=None):
+    return ask_for_password()
+
+
 def main(cwd='.'):
     op = parse_opts()
     options, args = op.parse_args()
@@ -104,26 +111,29 @@ def main(cwd='.'):
         sys.exit(1)
 
     while True:
-        if options.askpass:
-            passphrase = ask_for_password()
-        elif options.password:
-            passphrase = options.password
+        if options.password:
+            password = options.password
+        elif options.timeout is None:
+            password = get_password(options)
         else:
-            usage(op, 'Either -p or -a is required')
-            sys.exit(1)
+            password = get_password
 
-        if not passphrase:
-            LOG.info('No password given, exiting')
+        if not password:
             sys.exit(1)
 
         try:
             kpctxt = server.KeePassHTTPContext(
-                args[0], passphrase,
-                allow_associate=options.allow_associate)
+                args[0], password,
+                allow_associate=options.allow_associate,
+                timeout=options.timeout)
             break
         except ValueError:
-            LOG.info('Incorrect password, asking again')
-            continue
+            if options.password:
+                LOG.error('Database password is incorrect')
+                sys.exit(1)
+            elif options.timeout is not None:
+                LOG.error('Timeout-based initialization failed')
+                sys.exit(1)
 
     httpd = server.KeePassHTTPServer(('127.0.0.1', 19455), kpctxt)
     LOG.debug('Starting server')
