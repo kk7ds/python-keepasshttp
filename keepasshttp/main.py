@@ -102,16 +102,29 @@ def main(cwd='.'):
     if len(args) != 1:
         usage(op, 'A database must be specified')
         sys.exit(1)
-    if options.askpass:
-        passphrase = ask_for_password()
-    elif options.password:
-        passphrase = options.password
-    else:
-        usage(op, 'Either -p or -a is required')
-        sys.exit(1)
 
-    kpctxt = server.KeePassHTTPContext(args[0], passphrase,
-                                       allow_associate=options.allow_associate)
+    while True:
+        if options.askpass:
+            passphrase = ask_for_password()
+        elif options.password:
+            passphrase = options.password
+        else:
+            usage(op, 'Either -p or -a is required')
+            sys.exit(1)
+
+        if not passphrase:
+            LOG.info('No password given, exiting')
+            sys.exit(1)
+
+        try:
+            kpctxt = server.KeePassHTTPContext(
+                args[0], passphrase,
+                allow_associate=options.allow_associate)
+            break
+        except ValueError:
+            LOG.info('Incorrect password, asking again')
+            continue
+
     httpd = server.KeePassHTTPServer(('127.0.0.1', 19455), kpctxt)
     LOG.debug('Starting server')
     httpd.serve_forever()
