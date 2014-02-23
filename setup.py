@@ -8,7 +8,7 @@ setup(name='python-keepasshttp',
       url='http://github.com/kk7ds/python-keepasshttp',
       license='GPLv3',
       scripts=['keepass_server'],
-      install_requires=['python-keepass'],
+      install_requires=['python-keepass', 'python_daemon'],
       tests_require=['mock', 'nose'],
       test_suite='nose.collector',
      )

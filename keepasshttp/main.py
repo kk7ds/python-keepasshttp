@@ -36,6 +36,10 @@ def parse_opts():
                   help='Allow new associations')
     op.add_option('-D', '--debug', dest='debug', action='store_true',
                   default=False, help='Enable debug logging')
+    op.add_option('-l', '--logfile', dest='logfile', default=None,
+                  help='Log filename')
+    op.add_option('-d', '--daemon', dest='daemon', action='store_true',
+                  default=False, help='Start as a daemon')
     return op
 
 
@@ -86,13 +90,15 @@ def ask_for_password():
     return passphrase
 
 
-def main():
+def main(cwd='.'):
     op = parse_opts()
     options, args = op.parse_args()
     if options.debug:
         util.set_log_level(logging.DEBUG)
     else:
         util.set_log_level(logging.INFO)
+    if options.logfile:
+        util.add_log_file(os.path.join(cwd, options.logfile))
     if len(args) != 1:
         usage(op, 'A database must be specified')
         sys.exit(1)

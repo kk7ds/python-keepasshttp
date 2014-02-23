@@ -77,10 +77,11 @@ def get_logger(name):
     return logger
 
 
-def add_logger_file(logger, filename):
+def add_log_file(filename):
     handler = logging.FileHandler(filename=filename)
     handler.setFormatter(logging.Formatter(fmt=FORMAT))
-    logger.addHandler(handler)
+    for logger in ALL_LOGGERS:
+        logger.addHandler(handler)
     return handler
 
 
