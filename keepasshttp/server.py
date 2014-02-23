@@ -21,6 +21,7 @@ from SimpleHTTPServer import SimpleHTTPRequestHandler
 from StringIO import StringIO
 import base64
 import json
+import os
 import sys
 import uuid
 
@@ -41,18 +42,23 @@ def aes_unpad(data):
     else:
         return data
 
+def configfile_location():
+    return os.path.join(os.getenv('HOME', '.'),
+                        '.keepasshttp')
+
 class KeePassHTTPContext(object):
     def __init__(self, db_file, db_pass, allow_associate=False):
         self._db_util = util.KeePassUtil(db_file, db_pass)
         self._config = ConfigParser()
-        self._config.read('pykeepasshttp.conf')
+        self._config.read(configfile_location())
         self._allow_associate = allow_associate
         if not self._config.has_section('general'):
             self._config.add_section('general')
 
 
     def _save_config(self):
-        with file('pykeepasshttp.conf', 'w') as f:
+        with file(configfile_location(), 'w') as f:
+            os.chmod(configfile_location(), 0600)
             self._config.write(f)
 
     @property
