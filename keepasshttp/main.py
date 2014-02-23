@@ -14,6 +14,7 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 from optparse import OptionParser
+import os
 import subprocess
 import sys
 
@@ -35,6 +36,39 @@ def usage(op, error=None):
     if error:
         print "ERROR: %s" % error
 
+def fallback_gui_password_prompt():
+    import Tkinter
+    import tkSimpleDialog
+    root = Tkinter.Tk()
+    root.withdraw()
+    password = tkSimpleDialog.askstring('Password', 'Database Password')
+    return password
+
+def ask_for_password():
+    if os.path.exists('/usr/bin/Xdialog'):
+        p = subprocess.Popen(['/usr/bin/Xdialog',
+                              '--password',
+                              '--stdout',
+                              '--inputbox',
+                              'KeePassX Database Password',
+                              '0', '50'],
+                             stdout=subprocess.PIPE)
+        passphrase = p.stdout.read().strip()
+        p.wait()
+    elif os.path.exists('/usr/libexec/openssh/ssh-askpass'):
+        p = subprocess.Popen(['/usr/libexec/openssh/ssh-askpass',
+                              'KeePassX Database Password'],
+                             stdout=subprocess.PIPE)
+        passphrase = p.stdout.read().strip()
+        p.wait()
+    else:
+        try:
+            passphrase = fallback_gui_password_prompt()
+        except ImportError:
+            print 'KeePassX Database Password: ',
+            passphrase = sys.stdin.readline().strip()
+    return passphrase
+
 def main():
     op = parse_opts()
     options, args = op.parse_args()
@@ -42,11 +76,7 @@ def main():
         usage(op, 'A database must be specified')
         sys.exit(1)
     if options.askpass:
-        p = subprocess.Popen(['/usr/libexec/openssh/ssh-askpass',
-                              'KeePassX Database Password'],
-                             stdout=subprocess.PIPE)
-        passphrase = p.stdout.read().strip()
-        p.wait()
+        passphrase = ask_for_password()
     elif options.password:
         passphrase = options.password
     else:
