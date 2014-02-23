@@ -169,24 +169,27 @@ class KeePassHTTPContext(object):
             resp['Entries'] = [self._make_entry(resp['Nonce'], entry)]
         return resp
 
-class Handler(BaseHTTPServer.BaseHTTPRequestHandler):
+class KeePassHTTPRequestHandler(BaseHTTPServer.BaseHTTPRequestHandler):
     def do_POST(self):
         length = int(self.headers['Content-Length'])
         data = json.loads(self.rfile.read(length))
 
         rt = data['RequestType']
         if rt == 'test-associate':
-            resp = kpctxt.test_associate(data.get('Nonce'),
-                                         data.get('Verifier'),
-                                         data.get('Id'))
+            resp = self.server.context.test_associate(
+                data.get('Nonce'),
+                data.get('Verifier'),
+                data.get('Id'))
         elif rt == 'associate':
-            resp = kpctxt.associate(data.get('Nonce'),
-                                    data.get('Verifier'),
-                                    data.get('Key'))
+            resp = self.server.context.associate(
+                data.get('Nonce'),
+                data.get('Verifier'),
+                data.get('Key'))
         elif rt == 'get-logins':
-            resp = kpctxt.get_logins(data.get('Nonce'),
-                                     data.get('Url'),
-                                     data.get('SubmitUrl'))
+            resp = self.server.context.get_logins(
+                data.get('Nonce'),
+                data.get('Url'),
+                data.get('SubmitUrl'))
         else:
             resp = {}
 
@@ -199,6 +202,12 @@ class Handler(BaseHTTPServer.BaseHTTPRequestHandler):
         self.end_headers()
         s.seek(0)
         self.wfile.write(s.read())
+
+class KeePassHTTPServer(BaseHTTPServer.HTTPServer):
+    def __init__(self, server_address, context):
+        BaseHTTPServer.HTTPServer.__init__(self, server_address,
+                                           KeePassHTTPRequestHandler)
+        self.context = context
 
 def parse_opts():
     op = OptionParser()
@@ -236,5 +245,5 @@ if __name__ == '__main__':
 
     kpctxt = KeePassHTTPContext(args[0], passphrase,
                                 allow_associate=options.allow_associate)
-    httpd = BaseHTTPServer.HTTPServer(('127.0.0.1', 19455), Handler)
+    httpd = KeePassHTTPServer(('127.0.0.1', 19455), kpctxt)
     httpd.serve_forever()
