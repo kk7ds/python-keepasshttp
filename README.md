@@ -27,6 +27,11 @@ the keepass server and start it again with associations disabled:
 
     keepass_server -a my_database.kdb
 
+## Testing
+To run the tests:
+
+    python setup.py test
+
 ## Caveats
  * Password generation/saving from the plugin side is not supported
 
