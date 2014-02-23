@@ -30,10 +30,11 @@ def aes_unpad(data):
         return data
 
 class KeePassHTTPContext(object):
-    def __init__(self, db_file, db_pass):
+    def __init__(self, db_file, db_pass, allow_associate=False):
         self._db_util = keepass_util.KeePassUtil(db_file, db_pass)
         self._config = ConfigParser()
         self._config.read('pykeepasshttp.conf')
+        self._allow_associate = allow_associate
         if not self._config.has_section('general'):
             self._config.add_section('general')
 
@@ -113,9 +114,15 @@ class KeePassHTTPContext(object):
             'RequestType': 'associate',
             'Id': self.ident,
         }
+        if not self._allow_associate:
+            print 'Refused to Associate (disabled)'
+            resp['Success'] = False
+            resp['Error'] = 'Association is disabled'
+            return resp
         if not self._verify(nonce64, verifier64, key64):
             print "Failed verification for Associate"
             resp['Success'] = False
+            resp['Error'] = 'Key verification failed'
             return resp
 
         self._config.set('general', 'key', key64)
@@ -199,6 +206,9 @@ def parse_opts():
                   help='Password for database')
     op.add_option('-a', '--ask', dest='askpass', action='store_true',
                   default=False, help='Ask for password')
+    op.add_option('-A', '--allow-associate', dest='allow_associate',
+                  action='store_true', default=False,
+                  help='Allow new associations')
     return op
 
 def usage(op, error=None):
@@ -224,6 +234,7 @@ if __name__ == '__main__':
         usage(op, 'Either -p or -a is required')
         sys.exit(1)
 
-    kpctxt = KeePassHTTPContext(args[0], passphrase)
+    kpctxt = KeePassHTTPContext(args[0], passphrase,
+                                allow_associate=options.allow_associate)
     httpd = BaseHTTPServer.HTTPServer(('127.0.0.1', 19455), Handler)
     httpd.serve_forever()
