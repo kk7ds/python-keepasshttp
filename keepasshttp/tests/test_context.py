@@ -242,6 +242,18 @@ class TestContext(unittest.TestCase):
             context._check_timeout()
         fake_get_password.assert_called_once_with()
 
+    @mock.patch('time.time')
+    def test_check_timeout_honors_timeout_of_zero(self, time):
+        fake_get_password = mock.MagicMock()
+        fake_get_password.return_value = 'foo'
+        context = server.KeePassHTTPContext('fake', fake_get_password,
+                                            timeout=0)
+        time.return_value = 100
+        with mock.patch('keepasshttp.util.KeePassUtil') as db:
+            context._check_timeout()
+            context._check_timeout()
+        self.assertEqual(0, fake_get_password.call_count)
+
     def test_get_logins_check_timeout_fails(self):
         with mock.patch.object(self.context, '_check_timeout') as check:
             check.return_value = False
