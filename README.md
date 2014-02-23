@@ -28,7 +28,6 @@ the keepass server and start it again with associations disabled:
     keepass_server -a my_database.kdb
 
 ## Caveats
- * Changes to your database require restarting the server
  * Password generation/saving from the plugin side is not supported
 
 ## References

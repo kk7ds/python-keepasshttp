@@ -13,6 +13,8 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
+import os
+
 from keepass import kpdb
 
 class KeePassUtil(object):
@@ -20,6 +22,13 @@ class KeePassUtil(object):
         self._db = kpdb.Database(self._db_file,
                                  self._db_pass)
         self._root = self._db.hierarchy()
+        self._db_mtime = os.path.getmtime(self._db_file)
+
+    def _check_reload(self):
+        current_mtime = os.path.getmtime(self._db_file)
+        if current_mtime > self._db_mtime:
+            print 'Reloading database due to change'
+            self._reload()
 
     def __init__(self, db_file, db_pass):
         self._db_file = db_file
@@ -45,4 +54,5 @@ class KeePassUtil(object):
         return None
 
     def find_entry_by_url(self, url):
+        self._check_reload()
         return self._find_by_attr(self._root, url=url)
