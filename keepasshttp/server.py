@@ -200,7 +200,7 @@ class KeePassHTTPRequestHandler(BaseHTTPServer.BaseHTTPRequestHandler):
         length = int(self.headers['Content-Length'])
         data = json.loads(self.rfile.read(length))
 
-        rt = data['RequestType']
+        rt = data.get('RequestType')
         if rt == 'test-associate':
             resp = self.server.context.test_associate(
                 data.get('Nonce'),
