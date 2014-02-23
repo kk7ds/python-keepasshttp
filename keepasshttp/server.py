@@ -14,8 +14,8 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 import BaseHTTPServer
-from ConfigParser import ConfigParser
-from Crypto.Cipher import AES
+import ConfigParser
+from Crypto import Cipher
 from Crypto import Random
 from SimpleHTTPServer import SimpleHTTPRequestHandler
 from StringIO import StringIO
@@ -28,7 +28,7 @@ import uuid
 from keepasshttp import util
 
 def new_iv():
-    return Random.new().read(AES.block_size)
+    return Random.new().read(Cipher.AES.block_size)
 
 def aes_pad(data):
     pad_len = 16 - len(data) % 16
@@ -49,7 +49,7 @@ def configfile_location():
 class KeePassHTTPContext(object):
     def __init__(self, db_file, db_pass, allow_associate=False):
         self._db_util = util.KeePassUtil(db_file, db_pass)
-        self._config = ConfigParser()
+        self._config = ConfigParser.ConfigParser()
         self._config.read(configfile_location())
         self._allow_associate = allow_associate
         if not self._config.has_section('general'):
@@ -79,13 +79,13 @@ class KeePassHTTPContext(object):
             key = base64.b64decode(key64)
         iv = base64.b64decode(nonce64)
         verifier = base64.b64decode(verifier64)
-        aes = AES.new(key, AES.MODE_CBC, iv)
+        aes = Cipher.AES.new(key, Cipher.AES.MODE_CBC, iv)
         cleartext = aes_unpad(aes.decrypt(verifier))
         return nonce64 == cleartext
 
     def _sign(self, resp):
         iv = new_iv()
-        aes = AES.new(self.key, AES.MODE_CBC, iv)
+        aes = Cipher.AES.new(self.key, Cipher.AES.MODE_CBC, iv)
         nonce64 = base64.b64encode(iv)
         verifier64 = base64.b64encode(aes.encrypt(aes_pad(nonce64)))
         signature = {
@@ -98,11 +98,13 @@ class KeePassHTTPContext(object):
         resp.update(signature)
 
     def _decrypt(self, nonce64, data):
-        aes = AES.new(self.key, AES.MODE_CBC, base64.b64decode(nonce64))
+        aes = Cipher.AES.new(self.key, Cipher.AES.MODE_CBC,
+                             base64.b64decode(nonce64))
         return aes_unpad(aes.decrypt(data))
 
     def _encrypt(self, nonce64, data):
-        aes = AES.new(self.key, AES.MODE_CBC, base64.b64decode(nonce64))
+        aes = Cipher.AES.new(self.key, Cipher.AES.MODE_CBC,
+                             base64.b64decode(nonce64))
         return base64.b64encode(aes.encrypt(aes_pad(data)))
 
     def _test_associate(self, nonce64, verifier64, ident):
@@ -118,7 +120,7 @@ class KeePassHTTPContext(object):
 
     def test_associate(self, nonce64, verifier64, ident):
         resp = {'RequestType': 'test-associate',
-                'Id': 'FIXME',
+                'Id': self.ident,
                 }
         if self._test_associate(nonce64, verifier64, ident):
             resp['Success'] = True
@@ -170,9 +172,10 @@ class KeePassHTTPContext(object):
 
         return encentry
 
-    def get_logins(self, nonce64, enc_url, enc_submit_url):
+    def get_logins(self, nonce64, verifier64, enc_url, enc_submit_url):
         url = self._decrypt(nonce64, base64.b64decode(enc_url))
         submit_url = self._decrypt(nonce64, base64.b64decode(enc_submit_url))
+        self._verify(nonce64, verifier64)
         entry = self._db_util.find_entry_by_url(submit_url)
         if not entry:
             entry = self._db_util.find_entry_by_url(url)
@@ -206,6 +209,7 @@ class KeePassHTTPRequestHandler(BaseHTTPServer.BaseHTTPRequestHandler):
         elif rt == 'get-logins':
             resp = self.server.context.get_logins(
                 data.get('Nonce'),
+                data.get('Verifier'),
                 data.get('Url'),
                 data.get('SubmitUrl'))
         else:
