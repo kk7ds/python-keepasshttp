@@ -13,7 +13,6 @@ import subprocess
 
 import keepass_util
 
-KEY = None
 def new_iv():
     return Random.new().read(AES.block_size)
 
