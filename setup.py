@@ -9,4 +9,6 @@ setup(name='python-keepasshttp',
       license='GPLv3',
       scripts=['keepass_server'],
       install_requires=['python-keepass'],
+      tests_require=['mock', 'nose'],
+      test_suite='nose.collector',
      )
