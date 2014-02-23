@@ -20,6 +20,7 @@ import sys
 
 from keepasshttp import server
 
+
 def parse_opts():
     op = OptionParser()
     op.add_option('-p', '--password', dest='password',
@@ -31,10 +32,12 @@ def parse_opts():
                   help='Allow new associations')
     return op
 
+
 def usage(op, error=None):
     op.print_help()
     if error:
         print "ERROR: %s" % error
+
 
 def fallback_gui_password_prompt():
     import Tkinter
@@ -43,6 +46,7 @@ def fallback_gui_password_prompt():
     root.withdraw()
     password = tkSimpleDialog.askstring('Password', 'Database Password')
     return password
+
 
 def ask_for_password():
     if os.path.exists('/usr/bin/Xdialog'):
@@ -68,6 +72,7 @@ def ask_for_password():
             print 'KeePassX Database Password: ',
             passphrase = sys.stdin.readline().strip()
     return passphrase
+
 
 def main():
     op = parse_opts()

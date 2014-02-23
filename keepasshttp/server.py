@@ -27,13 +27,16 @@ import uuid
 
 from keepasshttp import util
 
+
 def new_iv():
     return Random.new().read(Cipher.AES.block_size)
+
 
 def aes_pad(data):
     pad_len = 16 - len(data) % 16
     pad_chr = chr(pad_len)
     return data + (pad_chr * pad_len)
+
 
 def aes_unpad(data):
     pad_len = ord(data[-1])
@@ -42,9 +45,11 @@ def aes_unpad(data):
     else:
         return data
 
+
 def configfile_location():
     return os.path.join(os.getenv('HOME', '.'),
                         '.keepasshttp')
+
 
 class KeePassHTTPContext(object):
     def __init__(self, db_file, db_pass, allow_associate=False):
@@ -54,7 +59,6 @@ class KeePassHTTPContext(object):
         self._allow_associate = allow_associate
         if not self._config.has_section('general'):
             self._config.add_section('general')
-
 
     def _save_config(self):
         with file(configfile_location(), 'w') as f:
@@ -190,6 +194,7 @@ class KeePassHTTPContext(object):
             resp['Entries'] = [self._make_entry(resp['Nonce'], entry)]
         return resp
 
+
 class KeePassHTTPRequestHandler(BaseHTTPServer.BaseHTTPRequestHandler):
     def do_POST(self):
         length = int(self.headers['Content-Length'])
@@ -215,7 +220,6 @@ class KeePassHTTPRequestHandler(BaseHTTPServer.BaseHTTPRequestHandler):
         else:
             resp = {}
 
-
         s = StringIO()
         s.write(json.dumps(resp))
         self.send_response(resp and 200 or 404)
@@ -225,9 +229,9 @@ class KeePassHTTPRequestHandler(BaseHTTPServer.BaseHTTPRequestHandler):
         s.seek(0)
         self.wfile.write(s.read())
 
+
 class KeePassHTTPServer(BaseHTTPServer.HTTPServer):
     def __init__(self, server_address, context):
         BaseHTTPServer.HTTPServer.__init__(self, server_address,
                                            KeePassHTTPRequestHandler)
         self.context = context
-

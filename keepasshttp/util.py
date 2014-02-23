@@ -17,6 +17,7 @@ import os
 
 from keepass import kpdb
 
+
 class KeePassUtil(object):
     def _reload(self):
         self._db = kpdb.Database(self._db_file,
