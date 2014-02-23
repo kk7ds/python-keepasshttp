@@ -24,7 +24,7 @@ import json
 import sys
 import uuid
 
-import keepass_util
+from keepasshttp import util
 
 def new_iv():
     return Random.new().read(AES.block_size)
@@ -43,7 +43,7 @@ def aes_unpad(data):
 
 class KeePassHTTPContext(object):
     def __init__(self, db_file, db_pass, allow_associate=False):
-        self._db_util = keepass_util.KeePassUtil(db_file, db_pass)
+        self._db_util = util.KeePassUtil(db_file, db_pass)
         self._config = ConfigParser()
         self._config.read('pykeepasshttp.conf')
         self._allow_associate = allow_associate

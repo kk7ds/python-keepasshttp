@@ -15,8 +15,9 @@
 
 from optparse import OptionParser
 import subprocess
+import sys
 
-import server
+from keepasshttp import server
 
 def parse_opts():
     op = OptionParser()
@@ -34,7 +35,7 @@ def usage(op, error=None):
     if error:
         print "ERROR: %s" % error
 
-if __name__ == '__main__':
+def main():
     op = parse_opts()
     options, args = op.parse_args()
     if len(args) != 1:
