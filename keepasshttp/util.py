@@ -13,13 +13,17 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
+import logging
 import os
 
 from keepass import kpdb
 
+FORMAT = '%(asctime)19.19s %(name)-10.10s %(levelname)s %(message)s'
+
 
 class KeePassUtil(object):
     def _reload(self):
+        LOG.debug('Loading %s' % self._db_file)
         self._db = kpdb.Database(self._db_file,
                                  self._db_pass)
         self._root = self._db.hierarchy()
@@ -28,7 +32,7 @@ class KeePassUtil(object):
     def _check_reload(self):
         current_mtime = os.path.getmtime(self._db_file)
         if current_mtime > self._db_mtime:
-            print 'Reloading database due to change'
+            LOG.info('Detected database change')
             self._reload()
 
     def __init__(self, db_file, db_pass):
@@ -57,3 +61,32 @@ class KeePassUtil(object):
     def find_entry_by_url(self, url):
         self._check_reload()
         return self._find_by_attr(self._root, url=url)
+
+
+ALL_LOGGERS = []
+
+
+def get_logger(name):
+    name = name.split('.')[-1]
+    logger = logging.getLogger(name)
+    handler = logging.StreamHandler()
+    handler.setFormatter(logging.Formatter(fmt=FORMAT))
+    logger.addHandler(handler)
+    logger.setLevel(logging.CRITICAL)
+    ALL_LOGGERS.append(logger)
+    return logger
+
+
+def add_logger_file(logger, filename):
+    handler = logging.FileHandler(filename=filename)
+    handler.setFormatter(logging.Formatter(fmt=FORMAT))
+    logger.addHandler(handler)
+    return handler
+
+
+def set_log_level(level):
+    for logger in ALL_LOGGERS:
+        logger.setLevel(level)
+
+
+LOG = get_logger(__name__)

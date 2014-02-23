@@ -161,7 +161,7 @@ class TestContext(unittest.TestCase):
         entry = mock.MagicMock()
         entry.username = 'user'
         entry.password = 'pass'
-        entry.name = 'name'
+        entry.name.return_value = 'name'
         entry.uuid = 'uuid'
 
         def fake_encrypt(nonce, data):
@@ -184,7 +184,9 @@ class TestContext(unittest.TestCase):
 
         def fake_find_by_url(url):
             if url == 'url':
-                return url
+                entry = mock.MagicMock()
+                entry.name.return_value = 'name'
+                return entry
 
         def fake_sign(resp):
             resp['Nonce'] = 'nonce'

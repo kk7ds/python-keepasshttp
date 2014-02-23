@@ -13,12 +13,16 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
+import logging
 from optparse import OptionParser
 import os
 import subprocess
 import sys
 
 from keepasshttp import server
+from keepasshttp import util
+
+LOG = util.get_logger(__name__)
 
 
 def parse_opts():
@@ -30,6 +34,8 @@ def parse_opts():
     op.add_option('-A', '--allow-associate', dest='allow_associate',
                   action='store_true', default=False,
                   help='Allow new associations')
+    op.add_option('-D', '--debug', dest='debug', action='store_true',
+                  default=False, help='Enable debug logging')
     return op
 
 
@@ -50,6 +56,7 @@ def fallback_gui_password_prompt():
 
 def ask_for_password():
     if os.path.exists('/usr/bin/Xdialog'):
+        LOG.debug('Prompting for password with Xdialog')
         p = subprocess.Popen(['/usr/bin/Xdialog',
                               '--password',
                               '--stdout',
@@ -60,23 +67,32 @@ def ask_for_password():
         passphrase = p.stdout.read().strip()
         p.wait()
     elif os.path.exists('/usr/libexec/openssh/ssh-askpass'):
+        LOG.debug('Prompting for password with ssh-askpass')
         p = subprocess.Popen(['/usr/libexec/openssh/ssh-askpass',
                               'KeePassX Database Password'],
                              stdout=subprocess.PIPE)
         passphrase = p.stdout.read().strip()
         p.wait()
     else:
+        LOG.debug('Prompting for password with Tk')
         try:
             passphrase = fallback_gui_password_prompt()
         except ImportError:
+            LOG.warn('No UI askpass mechanism supported, trying console')
             print 'KeePassX Database Password: ',
             passphrase = sys.stdin.readline().strip()
+            if not passphrase:
+                LOG.error('No way to ask for the password!')
     return passphrase
 
 
 def main():
     op = parse_opts()
     options, args = op.parse_args()
+    if options.debug:
+        util.set_log_level(logging.DEBUG)
+    else:
+        util.set_log_level(logging.INFO)
     if len(args) != 1:
         usage(op, 'A database must be specified')
         sys.exit(1)
@@ -91,4 +107,5 @@ def main():
     kpctxt = server.KeePassHTTPContext(args[0], passphrase,
                                        allow_associate=options.allow_associate)
     httpd = server.KeePassHTTPServer(('127.0.0.1', 19455), kpctxt)
+    LOG.debug('Starting server')
     httpd.serve_forever()

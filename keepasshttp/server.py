@@ -27,6 +27,8 @@ import uuid
 
 from keepasshttp import util
 
+LOG = util.get_logger(__name__)
+
 
 def new_iv():
     return Random.new().read(Cipher.AES.block_size)
@@ -115,10 +117,11 @@ class KeePassHTTPContext(object):
         if ident is None:
             return False
         if not self._config.has_option('general', 'key'):
-            print "Rejecting unknown association: No Key Stored"
+            LOG.warn('Rejecting unknown association: No Key Stored')
             return False
         if ident != self.ident:
-            print 'Rejecting unknown association: Ident %s is wrong' % ident
+            LOG.warn('Rejecting unknown association: Ident %s is wrong' %
+                     ident)
             return False
         return self._verify(nonce64, verifier64)
 
@@ -127,9 +130,11 @@ class KeePassHTTPContext(object):
                 'Id': self.ident,
                 }
         if self._test_associate(nonce64, verifier64, ident):
+            LOG.debug('Confirming existing association')
             resp['Success'] = True
             self._sign(resp)
         else:
+            LOG.debug('No existing association')
             resp = {}
         return resp
 
@@ -139,19 +144,19 @@ class KeePassHTTPContext(object):
             'Id': self.ident,
         }
         if not self._allow_associate:
-            print 'Refused to Associate (disabled)'
+            LOG.warn('Refused to Associate (disabled)')
             resp['Success'] = False
             resp['Error'] = 'Association is disabled'
             return resp
         if not self._verify(nonce64, verifier64, key64):
-            print "Failed verification for Associate"
+            LOG.warn('Failed verification for Associate')
             resp['Success'] = False
             resp['Error'] = 'Key verification failed'
             return resp
 
         self._config.set('general', 'key', key64)
         self._save_config()
-        print "Associated"
+        LOG.info('Associated')
 
         resp['Success'] = True
         self._sign(resp)
@@ -179,17 +184,21 @@ class KeePassHTTPContext(object):
     def get_logins(self, nonce64, verifier64, enc_url, enc_submit_url):
         url = self._decrypt(nonce64, base64.b64decode(enc_url))
         submit_url = self._decrypt(nonce64, base64.b64decode(enc_submit_url))
+        LOG.debug('Searching for urls: %s and %s' % (url, submit_url))
         self._verify(nonce64, verifier64)
         entry = self._db_util.find_entry_by_url(submit_url)
         if not entry:
+            LOG.debug('No match for submit_url, trying url')
             entry = self._db_util.find_entry_by_url(url)
         resp = {
             'RequestType': 'get-logins',
             }
         self._sign(resp)
         if not entry:
+            LOG.debug('No match found')
             resp['Success'] = False
         else:
+            LOG.debug('Found matching entry `%s\'' % entry.name())
             resp['Success'] = True
             resp['Entries'] = [self._make_entry(resp['Nonce'], entry)]
         return resp
@@ -200,6 +209,7 @@ class KeePassHTTPRequestHandler(BaseHTTPServer.BaseHTTPRequestHandler):
         length = int(self.headers['Content-Length'])
         data = json.loads(self.rfile.read(length))
 
+        LOG.debug('Request: %s' % data)
         rt = data.get('RequestType')
         if rt == 'test-associate':
             resp = self.server.context.test_associate(
@@ -220,6 +230,7 @@ class KeePassHTTPRequestHandler(BaseHTTPServer.BaseHTTPRequestHandler):
         else:
             resp = {}
 
+        LOG.debug('Response: %s' % resp)
         s = StringIO()
         s.write(json.dumps(resp))
         self.send_response(resp and 200 or 404)
@@ -228,6 +239,9 @@ class KeePassHTTPRequestHandler(BaseHTTPServer.BaseHTTPRequestHandler):
         self.end_headers()
         s.seek(0)
         self.wfile.write(s.read())
+
+    def log_message(self, *args, **kwargs):
+        return
 
 
 class KeePassHTTPServer(BaseHTTPServer.HTTPServer):
