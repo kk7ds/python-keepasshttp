@@ -62,7 +62,14 @@ def fallback_gui_password_prompt():
 
 
 def ask_for_password():
-    if os.path.exists('/usr/bin/Xdialog'):
+    if os.path.exists('/usr/bin/zenity'):
+        LOG.debug('Prompting for password with Zenity')
+        p = subprocess.Popen(['/usr/bin/zenity',
+                              '--password', '--modal'],
+                             stdout=subprocess.PIPE)
+        passphrase = p.stdout.read().strip()
+        p.wait()
+    elif os.path.exists('/usr/bin/Xdialog'):
         LOG.debug('Prompting for password with Xdialog')
         p = subprocess.Popen(['/usr/bin/Xdialog',
                               '--password',
