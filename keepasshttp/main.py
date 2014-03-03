@@ -58,6 +58,9 @@ def parse_opts(defaults):
                   default=intopt('timeout'),
                   metavar='MINUTES',
                   help='Require password on demand and this often')
+    op.add_option('', '--save-config', dest='save_config',
+                  action='store_true', default=False,
+                  help='Save options to config file')
     return op
 
 
@@ -142,11 +145,25 @@ def main(cwd='.'):
         util.add_log_file(os.path.join(cwd, options.logfile))
 
     if (config.has_section('options') and
-            config.has_option('options', 'database')):
-        args.append(config.get('options', 'database'))
+            config.has_option('options', 'database') and
+            len(args) == 0):
+        args = [config.get('options', 'database')]
     if len(args) != 1:
         usage(op, 'A database must be specified')
         sys.exit(1)
+
+    if options.save_config:
+        if not config.has_section('options'):
+            config.add_section('options')
+        for opt, val in options.__dict__.items():
+            if getattr(options, opt):
+                print "Setting %s=%s" % (opt, val)
+                config.set('options', opt, val)
+        config.set('options', 'database', args[0])
+        with file(server.configfile_location(), 'w') as f:
+            config.write(f)
+        print "Saved options to config file"
+        return
 
     while True:
         if options.password:
