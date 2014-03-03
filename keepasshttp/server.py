@@ -52,15 +52,18 @@ def configfile_location():
 
 class KeePassHTTPContext(object):
     def __init__(self, db_file, db_pass, allow_associate=False,
-                 timeout=None):
+                 timeout=None, config=None):
         self._db_file = db_file
         self._db_pass = db_pass
         self._db_util = util.KeePassUtil(db_file)
         if not callable(db_pass):
             self._db_util.unlock(db_pass)
         self._timeout = timeout is not None and timeout * 60 or 0
-        self._config = ConfigParser.ConfigParser()
-        self._config.read(configfile_location())
+        if config:
+            self._config = config
+        else:
+            self._config = ConfigParser.ConfigParser()
+            self._config.read(configfile_location())
         self._allow_associate = allow_associate
         if not self._config.has_section('general'):
             self._config.add_section('general')

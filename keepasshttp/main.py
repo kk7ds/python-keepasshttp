@@ -13,6 +13,7 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
+import ConfigParser
 import logging
 from optparse import OptionParser
 import os
@@ -25,23 +26,37 @@ from keepasshttp import util
 LOG = util.get_logger(__name__)
 
 
-def parse_opts():
+def parse_opts(defaults):
+    def boolopt(k):
+        return defaults.get(k, 'False') == 'True'
+
+    def intopt(k):
+        if k in defaults:
+            return int(defaults[k])
+        return None
+
     op = OptionParser()
     op.add_option('-p', '--password', dest='password',
                   help='Password for database')
     op.add_option('-a', '--ask', dest='askpass', action='store_true',
-                  default=False, help='Ask for password')
+                  default=boolopt('askpass'),
+                  help='Ask for password')
     op.add_option('-A', '--allow-associate', dest='allow_associate',
-                  action='store_true', default=False,
+                  action='store_true',
+                  default=boolopt('allow-associate'),
                   help='Allow new associations')
     op.add_option('-D', '--debug', dest='debug', action='store_true',
-                  default=False, help='Enable debug logging')
-    op.add_option('-l', '--logfile', dest='logfile', default=None,
+                  default=boolopt('debug'),
+                  help='Enable debug logging')
+    op.add_option('-l', '--logfile', dest='logfile',
+                  default=defaults.get('logfile'),
                   help='Log filename')
     op.add_option('-d', '--daemon', dest='daemon', action='store_true',
-                  default=False, help='Start as a daemon')
+                  default=boolopt('daemon'),
+                  help='Start as a daemon')
     op.add_option('-t', '--timeout', dest='timeout', type='int',
-                  default=None, metavar='MINUTES',
+                  default=intopt('timeout'),
+                  metavar='MINUTES',
                   help='Require password on demand and this often')
     return op
 
@@ -104,8 +119,20 @@ def get_password(options=None):
     return ask_for_password()
 
 
+def get_default_options(config):
+    if not config.has_section('options'):
+        return {}
+    options = {}
+    for option in config.options('options'):
+        options[option] = config.get('options', option)
+    return options
+
+
 def main(cwd='.'):
-    op = parse_opts()
+    config = ConfigParser.ConfigParser()
+    config.read(server.configfile_location())
+    op = parse_opts(get_default_options(config))
+
     options, args = op.parse_args()
     if options.debug:
         util.set_log_level(logging.DEBUG)
@@ -113,6 +140,10 @@ def main(cwd='.'):
         util.set_log_level(logging.INFO)
     if options.logfile:
         util.add_log_file(os.path.join(cwd, options.logfile))
+
+    if (config.has_section('options') and
+            config.has_option('options', 'database')):
+        args.append(config.get('options', 'database'))
     if len(args) != 1:
         usage(op, 'A database must be specified')
         sys.exit(1)
@@ -144,4 +175,5 @@ def main(cwd='.'):
 
     httpd = server.KeePassHTTPServer(('127.0.0.1', 19455), kpctxt)
     LOG.debug('Starting server')
+    LOG.debug('Config: %s' % options)
     httpd.serve_forever()
