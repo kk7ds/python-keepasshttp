@@ -163,7 +163,7 @@ def main(cwd='.'):
             kpctxt = server.KeePassHTTPContext(
                 args[0], password,
                 allow_associate=options.allow_associate,
-                timeout=options.timeout)
+                timeout=options.timeout, config=config)
             break
         except ValueError:
             if options.password:
