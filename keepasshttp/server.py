@@ -17,14 +17,10 @@ import BaseHTTPServer
 import ConfigParser
 from Crypto import Cipher
 from Crypto import Random
-from SimpleHTTPServer import SimpleHTTPRequestHandler
 from StringIO import StringIO
 import base64
 import json
 import os
-import sys
-import time
-import uuid
 
 from keepasshttp import util
 
