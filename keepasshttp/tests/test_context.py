@@ -4,6 +4,7 @@ import mock
 import unittest
 
 from keepasshttp import server
+from keepasshttp import util
 
 
 TEST_KEY = '0123456789ABCDEF'
@@ -125,7 +126,7 @@ class TestContext(unittest.TestCase):
 
     def test_test_associate_failed(self):
         with mock.patch.object(self.context, '_test_associate') as ta:
-            with mock.patch.object(self.context, '_sign') as sign:
+            with mock.patch.object(self.context, '_sign'):
                 ta.return_value = False
                 resp = self.context.test_associate('foo', 'bar', 'baz')
                 self.assertEqual({}, resp)
@@ -177,88 +178,62 @@ class TestContext(unittest.TestCase):
                           'Uuid': 'encrypted-uuid'},
                          encentry)
 
-    @mock.patch('time.time')
-    def test_check_timeout_not_timed_out(self, time):
-        fake_get_password = mock.MagicMock()
-        context = server.KeePassHTTPContext('fake', fake_get_password,
-                                            timeout=1)
-        time.return_value = 1
-        self.assertTrue(context._check_timeout())
-        self.assertEqual(0, fake_get_password.call_count)
+    def test_get_login(self):
+        self.context._db_util.find_entry_by_url.return_value = 'entry'
+        self.assertEqual('entry', self.context._get_login('foo'))
+        self.context._db_util.find_entry_by_url.assert_called_once_with('foo')
 
-    @mock.patch('time.time')
-    def test_check_timeout_asks_for_password(self, time):
-        fake_get_password = mock.MagicMock()
-        fake_get_password.return_value = 'password'
-        context = server.KeePassHTTPContext('fake', fake_get_password,
-                                            timeout=1)
-        time.return_value = 100
-        with mock.patch('keepasshttp.util.KeePassUtil') as db:
-            self.assertTrue(context._check_timeout())
-            db.assert_called_once_with('fake', 'password')
+    def test_get_login_locked(self):
+        get_calls = []
+        unlock_calls = []
 
-        fake_get_password.assert_called_once_with()
+        def fake_get(url):
+            get_calls.append(url)
+            if len(get_calls) < 2:
+                raise util.DatabaseLockedError()
+            return 'entry'
 
-    @mock.patch('time.time')
-    def test_check_timeout_asks_for_password_again(self, time):
-        passwords = ['right', 'wrong']
+        def fake_pass():
+            return 'pass'
 
-        def fake_get_password():
-            return passwords.pop()
+        def fake_unlock(password, timeout):
+            self.assertEqual('pass', password)
+            self.assertEqual(123 * 60, timeout)
+            unlock_calls.append(1)
+            if len(unlock_calls) < 2:
+                raise util.DatabaseLockedError()
 
-        def init_db(filename, password):
-            if password != 'right':
-                raise ValueError('Wrong password!')
+        with mock.patch('keepasshttp.util.KeePassUtil'):
+            context = server.KeePassHTTPContext('fake', fake_pass, timeout=123)
+        context._db_util.find_entry_by_url.side_effect = fake_get
+        context._db_util.unlock.side_effect = fake_unlock
+        result = context._get_login('url')
+        self.assertEqual('entry', result)
+        context._db_util.unlock.assert_called_with('pass',
+                                                   timeout=(123 * 60))
+        self.assertEqual(2, context._db_util.unlock.call_count)
+        context._db_util.find_entry_by_url('url')
 
-        context = server.KeePassHTTPContext('fake', fake_get_password,
-                                            timeout=1)
-        time.return_value = 100
-        with mock.patch('keepasshttp.util.KeePassUtil') as db:
-            db.side_effect = init_db
-            self.assertTrue(context._check_timeout())
-            self.assertEqual(2, db.call_count)
+    def test_get_login_locked_cancel_password(self):
+        with mock.patch('keepasshttp.util.KeePassUtil'):
+            context = server.KeePassHTTPContext('fake', lambda: None,
+                                                timeout=123)
+        context._db_util.find_entry_by_url.side_effect = \
+            util.DatabaseLockedError
+        self.assertEqual(None, context._get_login('url'))
+        context._db_util.find_entry_by_url.assert_called_once_with('url')
+        self.assertEqual(0, context._db_util.unlock.call_count)
 
-    @mock.patch('time.time')
-    def test_check_timeout_fails_with_no_password(self, time):
-        fake_get_password = mock.MagicMock()
-        fake_get_password.return_value = ''
-
-        context = server.KeePassHTTPContext('fake', fake_get_password,
-                                            timeout=1)
-        time.return_value = 100
-        with mock.patch('keepasshttp.util.KeePassUtil') as db:
-            self.assertFalse(context._check_timeout())
-            self.assertEqual(0, db.call_count)
-
-    @mock.patch('time.time')
-    def test_check_timeout_honors_timeout(self, time):
-        fake_get_password = mock.MagicMock()
-        fake_get_password.return_value = 'foo'
-        context = server.KeePassHTTPContext('fake', fake_get_password,
-                                            timeout=1)
-        time.return_value = 100
-        with mock.patch('keepasshttp.util.KeePassUtil') as db:
-            context._check_timeout()
-            context._check_timeout()
-        fake_get_password.assert_called_once_with()
-
-    @mock.patch('time.time')
-    def test_check_timeout_honors_timeout_of_zero(self, time):
-        fake_get_password = mock.MagicMock()
-        fake_get_password.return_value = 'foo'
-        context = server.KeePassHTTPContext('fake', fake_get_password,
-                                            timeout=0)
-        time.return_value = 100
-        with mock.patch('keepasshttp.util.KeePassUtil') as db:
-            context._check_timeout()
-            context._check_timeout()
-        self.assertEqual(0, fake_get_password.call_count)
-
-    def test_get_logins_check_timeout_fails(self):
-        with mock.patch.object(self.context, '_check_timeout') as check:
-            check.return_value = False
+    @mock.patch('base64.b64decode')
+    def test_get_logins_entry_fails(self, _):
+        with mock.patch.object(self.context, '_decrypt') as d, \
+                mock.patch.object(self.context, '_verify'), \
+                mock.patch.object(self.context, '_get_login') as g, \
+                mock.patch.object(self.context, '_sign'):
+            d.return_value = 'url'
+            g.return_value = None
             resp = self.context.get_logins('foo', 'bar', 'baz', 'bat')
-            self.assertEqual({'Success': False}, resp)
+        self.assertFalse(resp['Success'])
 
     def test_get_logins(self):
         def fake_decrypt(nonce, data):
@@ -280,9 +255,7 @@ class TestContext(unittest.TestCase):
         @mock.patch.object(self.context, '_sign')
         @mock.patch.object(self.context, '_decrypt')
         @mock.patch.object(self.context, '_make_entry')
-        @mock.patch.object(self.context, '_check_timeout')
-        def do_test(check_timeout, make_entry, decrypt, sign, verify):
-            check_timeout.return_value = True
+        def do_test(make_entry, decrypt, sign, verify):
             decrypt.side_effect = fake_decrypt
             make_entry.return_value = 'entry'
             verify.return_value = True
@@ -292,7 +265,6 @@ class TestContext(unittest.TestCase):
                                            base64.b64encode('suburl'))
             verify.assert_called_once_with('foo', 'bar')
             self.assertEqual(1, sign.call_count)
-            check_timeout.assert_called_once_with()
             return resp
 
         resp = do_test()

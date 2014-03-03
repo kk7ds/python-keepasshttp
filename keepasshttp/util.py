@@ -13,6 +13,7 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
+import datetime
 import logging
 import os
 
@@ -21,11 +22,14 @@ from keepass import kpdb
 FORMAT = '%(asctime)19.19s %(name)-10.10s %(levelname)s %(message)s'
 
 
+class DatabaseLockedError(Exception):
+    pass
+
+
 class KeePassUtil(object):
-    def _reload(self):
+    def _reload(self, password):
         LOG.debug('Loading %s' % self._db_file)
-        self._db = kpdb.Database(self._db_file,
-                                 self._db_pass)
+        self._db = kpdb.Database(self._db_file, password)
         self._root = self._db.hierarchy()
         self._db_mtime = os.path.getmtime(self._db_file)
 
@@ -33,12 +37,33 @@ class KeePassUtil(object):
         current_mtime = os.path.getmtime(self._db_file)
         if current_mtime > self._db_mtime:
             LOG.info('Detected database change')
-            self._reload()
+            self._reload(self._db_pass)
+            self._miss_cache = set()
 
-    def __init__(self, db_file, db_pass):
+    def _check_locked(self):
+        if self._expiration and datetime.datetime.now() >= self._expiration:
+            raise DatabaseLockedError()
+
+    def __init__(self, db_file):
         self._db_file = db_file
-        self._db_pass = db_pass
-        self._reload()
+        self._db_pass = None
+        self._db = None
+        self._miss_cache = set()
+        self._expiration = None
+
+    def unlock(self, password, timeout=None):
+        try:
+            self._reload(password)
+        except AttributeError:
+            raise DatabaseLockedError()
+        self._db_pass = password
+
+        if timeout is not None:
+            self._expiration = (datetime.datetime.now() +
+                                datetime.timedelta(seconds=timeout))
+            LOG.debug('Database unlocked until %s' % self._expiration)
+        else:
+            self._expiration = None
 
     def _find_by_attr(self, node, **kwargs):
         def is_match(entry):
@@ -59,9 +84,17 @@ class KeePassUtil(object):
         return None
 
     def find_entry_by_url(self, url):
+        if self._db is None:
+            raise DatabaseLockedError()
         self._check_reload()
-        return self._find_by_attr(self._root, url=url)
-
+        if url in self._miss_cache:
+            return None
+        self._check_locked()
+        entry = self._find_by_attr(self._root, url=url)
+        if entry is None:
+            self._miss_cache.add(url)
+            LOG.debug('Miss cache contains %i items' % len(self._miss_cache))
+        return entry
 
 ALL_LOGGERS = []
 

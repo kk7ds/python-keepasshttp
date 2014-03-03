@@ -59,12 +59,10 @@ class KeePassHTTPContext(object):
                  timeout=None):
         self._db_file = db_file
         self._db_pass = db_pass
+        self._db_util = util.KeePassUtil(db_file)
         if not callable(db_pass):
-            self._db_util = util.KeePassUtil(db_file, db_pass)
-        else:
-            self._db_util = None
-        self._timeout = timeout
-        self._last_password = 0
+            self._db_util.unlock(db_pass)
+        self._timeout = timeout is not None and timeout * 60 or 0
         self._config = ConfigParser.ConfigParser()
         self._config.read(configfile_location())
         self._allow_associate = allow_associate
@@ -190,38 +188,32 @@ class KeePassHTTPContext(object):
 
         return encentry
 
-    def _check_timeout(self):
-        if not self._timeout:
-            return True
-        now = time.time()
-        if (now - self._last_password) < (self._timeout * 60):
-            return True
+    def _get_login(self, url):
+        try:
+            return self._db_util.find_entry_by_url(url)
+        except util.DatabaseLockedError:
+            pass
 
         while True:
             db_pass = self._db_pass()
             if not db_pass:
-                return False
+                return None
             try:
-                self._db_util = util.KeePassUtil(self._db_file, db_pass)
-                self._last_password = now
-                return True
-            except ValueError:
+                self._db_util.unlock(db_pass, timeout=self._timeout)
+                return self._db_util.find_entry_by_url(url)
+            except util.DatabaseLockedError:
                 pass
 
     def get_logins(self, nonce64, verifier64, enc_url, enc_submit_url):
-        if not self._check_timeout():
-            return {'Success': False}
         url = self._decrypt(nonce64, base64.b64decode(enc_url))
         submit_url = self._decrypt(nonce64, base64.b64decode(enc_submit_url))
         LOG.debug('Searching for urls: %s and %s' % (url, submit_url))
         self._verify(nonce64, verifier64)
-        entry = self._db_util.find_entry_by_url(submit_url)
+        entry = self._get_login(submit_url)
         if not entry:
             LOG.debug('No match for submit_url, trying url')
-            entry = self._db_util.find_entry_by_url(url)
-        resp = {
-            'RequestType': 'get-logins',
-            }
+            entry = self._get_login(url)
+        resp = {'RequestType': 'get-logins'}
         self._sign(resp)
         if not entry:
             LOG.debug('No match found')
