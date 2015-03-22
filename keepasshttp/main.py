@@ -61,6 +61,9 @@ def parse_opts(defaults):
     op.add_option('', '--save-config', dest='save_config',
                   action='store_true', default=False,
                   help='Save options to config file')
+    op.add_option('', '--just-ask', dest='just_ask',
+                  action='store_true', default=False,
+                  help='Just ask for password and echo to stdout')
     return op
 
 
@@ -75,7 +78,8 @@ def fallback_gui_password_prompt():
     import tkSimpleDialog
     root = Tkinter.Tk()
     root.withdraw()
-    password = tkSimpleDialog.askstring('Password', 'Database Password')
+    password = tkSimpleDialog.askstring('Password', 'Database Password',
+                                        show='*')
     return password
 
 
@@ -137,6 +141,10 @@ def main(cwd='.'):
     op = parse_opts(get_default_options(config))
 
     options, args = op.parse_args()
+    if options.just_ask:
+        print get_password()
+        return
+
     if options.debug:
         util.set_log_level(logging.DEBUG)
     else:
@@ -167,7 +175,10 @@ def main(cwd='.'):
 
     while True:
         if options.password:
-            password = options.password
+            if options.password == '-':
+                password = sys.stdin.readline().strip
+            else:
+                password = options.password
         elif options.timeout is None:
             password = get_password(options)
         else:
