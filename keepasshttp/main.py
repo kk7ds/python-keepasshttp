@@ -197,7 +197,7 @@ def main(cwd='.'):
     while True:
         if options.password:
             if options.password == '-':
-                password = sys.stdin.readline().strip
+                password = sys.stdin.readline().strip()
             else:
                 password = options.password
         elif options.timeout is None:
