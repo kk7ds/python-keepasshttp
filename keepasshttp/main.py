@@ -84,6 +84,9 @@ def fallback_gui_password_prompt():
 
 
 def ask_for_password():
+    pashua_path = os.path.join(os.path.expanduser('~'),
+                               'Applications', 'Pashua.app',
+                               'Contents', 'MacOS', 'Pashua')
     if os.path.exists('/usr/bin/zenity'):
         LOG.debug('Prompting for password with Zenity')
         p = subprocess.Popen(['/usr/bin/zenity',
@@ -101,6 +104,24 @@ def ask_for_password():
                               '0', '50'],
                              stdout=subprocess.PIPE)
         passphrase = p.stdout.read().strip()
+        p.wait()
+    elif os.path.exists(pashua_path):
+        conf = """
+*.title = KeePass Password
+
+tf.type = password
+tf.label = Password
+tf.x = 0
+tf.y = 0
+tf.width = 300
+"""
+        p = subprocess.Popen([pashua_path, '-'],
+                             stdin=subprocess.PIPE,
+                             stdout=subprocess.PIPE)
+        p.stdin.write(conf)
+        p.stdin.close()
+        result = p.stdout.read().strip()
+        _, passphrase = result.split('=', 1)
         p.wait()
     elif os.path.exists('/usr/libexec/openssh/ssh-askpass'):
         LOG.debug('Prompting for password with ssh-askpass')
