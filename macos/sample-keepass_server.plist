@@ -6,7 +6,7 @@
     <string>keepass_server</string>
     <key>ProgramArguments</key>
     <array>
-        <string>/usr/local/bin/python</string>
+        <string>/usr/bin/python</string>
         <string>/Users/foobar/python-keepasshttp/keepass_server</string>
         <string>/Users/foobar/passwords.kdb</string>
     </array>
@@ -16,7 +16,5 @@
     <string>/dev/null</string>
     <key>StandardOutPath</key>
     <string>/dev/null</string>
-    <key>ServiceDescription</key>
-    <string>Run keepass_server at login</string>
 </dict>
 </plist>
