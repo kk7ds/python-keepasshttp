@@ -188,6 +188,9 @@ class KeePassHTTPContext(object):
         return encentry
 
     def _get_login(self, url):
+        if not url:
+            return None
+
         try:
             return self._db_util.find_entry_by_url(url)
         except util.DatabaseLockedError:
@@ -204,8 +207,15 @@ class KeePassHTTPContext(object):
                 pass
 
     def get_logins(self, nonce64, verifier64, enc_url, enc_submit_url):
-        url = self._decrypt(nonce64, base64.b64decode(enc_url))
-        submit_url = self._decrypt(nonce64, base64.b64decode(enc_submit_url))
+        if enc_url:
+            url = self._decrypt(nonce64, base64.b64decode(enc_url))
+        else:
+            url = None
+        if enc_submit_url:
+            submit_url = self._decrypt(nonce64, base64.b64decode(
+                enc_submit_url))
+        else:
+            submit_url = None
         LOG.debug('Searching for urls: %s and %s' % (url, submit_url))
         self._verify(nonce64, verifier64)
         entry = self._get_login(submit_url)
@@ -221,6 +231,16 @@ class KeePassHTTPContext(object):
             LOG.debug('Found matching entry `%s\'' % entry.name())
             resp['Success'] = True
             resp['Entries'] = [self._make_entry(resp['Nonce'], entry)]
+        return resp
+
+    def get_logins_count(self, nonce64, verifier64, enc_url, enc_submit_url):
+        resp = self.get_logins(nonce64, verifier64, enc_url, enc_submit_url)
+        resp['RequestType'] = 'get-logins-count'
+        if 'Entries' in resp:
+            resp['Count'] = len(resp['Entries'])
+            del resp['Entries']
+        else:
+            resp['Count'] = 0
         return resp
 
 
@@ -243,6 +263,12 @@ class KeePassHTTPRequestHandler(BaseHTTPServer.BaseHTTPRequestHandler):
                 data.get('Key'))
         elif rt == 'get-logins':
             resp = self.server.context.get_logins(
+                data.get('Nonce'),
+                data.get('Verifier'),
+                data.get('Url'),
+                data.get('SubmitUrl'))
+        elif rt == 'get-logins-count':
+            resp = self.server.context.get_logins_count(
                 data.get('Nonce'),
                 data.get('Verifier'),
                 data.get('Url'),

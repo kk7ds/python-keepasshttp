@@ -83,7 +83,7 @@ class KeePassUtil(object):
                 return entry
         return None
 
-    def find_entry_by_url(self, url):
+    def find_entry_by_exact_url(self, url):
         if self._db is None:
             raise DatabaseLockedError()
         self._check_reload()
@@ -95,6 +95,18 @@ class KeePassUtil(object):
             self._miss_cache.add(url)
             LOG.debug('Miss cache contains %i items' % len(self._miss_cache))
         return entry
+
+    def find_entry_by_url(self, url):
+        scheme, rest = url.split('://', 1)
+        path_elements = rest.split('/')
+        while path_elements:
+            url = '%s://%s' % (scheme, '/'.join(path_elements))
+            LOG.debug('Searching for %s' % url)
+            entry = self.find_entry_by_exact_url(url)
+            if entry:
+                return entry
+            path_elements.pop()
+
 
 ALL_LOGGERS = []
 
