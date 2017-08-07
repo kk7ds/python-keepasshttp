@@ -110,9 +110,7 @@ def ask_for_password():
 *.title = KeePass Password
 
 tf.type = password
-tf.label = Password
-tf.x = 0
-tf.y = 0
+tf.label = KeePass Password
 tf.width = 300
 """
         p = subprocess.Popen([pashua_path, '-'],
